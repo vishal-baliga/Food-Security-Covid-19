@@ -1,0 +1,643 @@
+Introduction:
+
+In this project, we have different datasets that we start with a dec19-2 dataset, which is a questionary from thousand of people from other states and gives information regarding personal information (Race, Age), Education, employment (Employed, looking for a job,...), Food Access(Number of Time dining out, Time doing grocery shopping, Amount Spent for Food).
+
+We tried to look for different points in Data:
+How does Age effect: Number of Times they go grocery shopping and restaurant, the amount of money they spend on food.
+
+How Does Race affect: Number of Times they go for grocery shopping and restaurant, the amount of money they spend on food.
+
+How Does Education Level effect: Number of Times they go for grocery shopping and restaurant, the amount of money they spend on food.
+
+Finally, we find out that Education and Employment are essential factors. So we wanted to see what proportion of Education and employment belongs to which Race.  
+
+Then we continue to a long process of merging different data based on states, which are Education Data, COVID-19 Data, Race Data, State Long-lat. 
+
+Here we make a heat map and scale on a US map that gives a better understanding of Race and Education's connection on COVID-19 case and death numbers. 
+
+Also in the last part of the code you can find Pie charts and cases per hundred thousands of population. 
+
+Note:
+In running the code, please start from the beginning and proceed with the sequence as some of the data names are the same, which can cause the problem. Dataset was too big, so I didn't want to make so many data names that RAM can handle. 
+
+
+Import Library:
+```{r}
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(stringr)
+library(lubridate)
+library(gridExtra)
+library(wesanderson)
+library(ggplot2)
+library(reshape2)
+library(reshape)
+library(ggalluvial)
+library(readxl)
+library(naniar)
+library(usmap)
+library(maptools)
+library(rgdal)
+
+```
+Download Data:
+```{r}
+library(readr)
+
+
+```
+
+Cleaning Data:
+```{r}
+data1 <- dec19_2[,c(16,18,22,33,34,40,44,48,51,52,59,69,395,397,399,403,405,407,408,411,425,433,436,438,447,495,496)]
+```
+
+National Base Analysis:
+
+
+Prepare Data:
+```{r}
+data2 <- filter(data1, PRTAGE>1 & PEEDUCA >35, PEMLR >0, PRTAGE<80, HETS8O>0, 20<PRTAGE, PTDTRACE<5)
+data2$PTDTRACE[data2$PTDTRACE ==1] <- "White"
+data2$PTDTRACE[data2$PTDTRACE ==2] <- "Black"
+data2$PTDTRACE[data2$PTDTRACE ==3] <- "NativeAmerican"
+data2$PTDTRACE[data2$PTDTRACE ==4] <- "Asian"
+
+data2[data2 <0]<-NA
+
+
+```
+
+
+In seven days number of visits to grocery store based on Age:
+The number of grocery shopping has a stable pattern for different age segments 
+```{r}
+data2$HES1A[data2$HES1A ==1] <- 0
+data2$HES1A[data2$HES1A ==2] <- 1
+ggplot(subset(data2, !is.na(HES1A)), aes(x= PRTAGE, y= HES1A))+geom_bar(stat="identity")+ylim(0,300)+
+  labs(y="Grocery shopping", x = "Age")+ theme_classic()+
+  
+  labs(title = "Age vs Number of Grocery shopping"
+       , subtitle = "(This is the sum value for each age group)")
+```
+In seven days number of visits to grocery store based on Age:
+Result: More people rely on dining out, and this is more important for people older than 50.
+```{r}
+data2$HES1C[data2$HES1C ==1] <- 0
+data2$HES1C[data2$HES1C ==2] <- 1
+ggplot(subset(data2, !is.na(HES1C)), aes(x= PRTAGE, y= HES1C))+geom_bar(stat="identity")+
+  labs(y="Dining Out", x = "Age") + theme_classic() +
+  labs(title = "Age vs Dinig Out"
+       , subtitle = "(This is the sum value for each age group)")
+```
+
+Education level in relation to spending for food 
+
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(PEEDUCA, HETS8O, PRTAGE, PTDTRACE ),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer$HETS8O[is.na(data2_longer$HETS8O)] = 0
+
+data2_longer <- filter(data2_longer, grepl('PESEX', DataType))
+data2_longer <- filter(data2_longer, PEEDUCA>36)
+
+
+cost_edu <- aggregate(data2_longer, list(data2_longer$PEEDUCA), mean, na.action = na.omit)
+ggplot(cost_edu, aes(x= PEEDUCA, y= HETS8O))+geom_bar(stat="identity")+
+  labs(y="Average Spending", x = "Education level (High-school-PHD/DR)")+
+  theme_classic() + labs(title = "Relation between education and spending for food")
+
+
+```
+
+
+
+Age in relation to spending for food  
+People spend less in older ages. But considering the number of shopping and dining, we saw they spend less each time they go shopping and dining. The occasion number of dining and shopping is more, but spending is less than younger people.
+```{r}
+
+data2_longer$PRTAGE[is.na(data2_longer$PRTAGE)] = 0
+
+data2_longer <- filter(data2_longer, grepl('PESEX', DataType))
+
+cost_edu <- aggregate(data2_longer, list(data2_longer$PRTAGE), mean, na.action = na.omit)
+ggplot(cost_edu, aes(x= PRTAGE, y= HETS8O))+geom_histogram(stat="identity")+
+  labs(y="Average Spending", x = "Age") + theme_classic()+labs(title = "Age vs Number of Grocery shopping") +labs(title = "Relation between age and spending for food")
+
+```
+
+
+
+Race in relation to spending for food:
+Black people spend the least amount of money on food, which hardens their access to food
+```{r}
+
+data2_longer$HETS8O[is.na(data2_longer$HETS8O)] = 0
+
+data2_longer <- filter(data2_longer, grepl('PESEX', DataType))
+
+cost_edu <- aggregate(data2_longer, list(data2_longer$PTDTRACE), mean, na.action = na.omit)
+ggplot(cost_edu, aes(x= Group.1, y= HETS8O))+geom_bar(stat="identity") +
+  labs(y="Average Spending", x = "Race") + theme_classic() + labs(title = "Relation between Race and spending for food")
+```
+
+
+
+The relation of job status to spending:
+People who are employed can spend more
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(PEEDUCA, HETS8O, PRTAGE, PTDTRACE, PEMLR ),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer$HETS8O[is.na(data2_longer$HETS8O)] = 0
+data2_longer <- filter(data2_longer, grepl('PESEX', DataType))
+data2_longer <- filter(data2_longer, PEMLR<7)
+cost_edu <- aggregate(data2_longer, list(data2_longer$PEMLR), mean, na.action = na.omit)
+ggplot(cost_edu, aes(x= PEMLR, y= HETS8O))+geom_histogram(stat="identity") + theme_classic()+ geom_bar(stat="identity") +
+  labs(y="Average Spending", x = "Employment") + theme_classic() + labs(title = "Relation between Employment and spending for food",
+                            subtitle = "1=Employed at Work, 2=Employed-Absent, 3=Unemployed Looking,4=Unemployed on Layoff, 5=Retired, 6=Disabled, 7Not in labor- other" ) + theme(
+  plot.subtitle = element_text(color = "red", size = 5)
+)
+
+
+```
+
+
+The proportion of each education segment:
+Number of white people with different levels of education in dataset:
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(HETS8O, PRTAGE, PTDTRACE ),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer <- filter(data2_longer, grepl('PEEDUCA', DataType))
+
+  data2_longer <- filter(data2_longer, grepl('White', PTDTRACE))
+  a <- c()
+  for (i in 1:47) {
+    a[i]<- sum(data2_longer$Value == i)
+    }
+
+```
+
+Number of Black people with different levels of education in dataset:
+```{r}
+
+data2_longer <- data2%>%
+  pivot_longer(-c(HETS8O, PRTAGE, PTDTRACE ),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer <- filter(data2_longer, grepl('PEEDUCA', DataType))
+data2_longer <- filter(data2_longer, grepl('Black', PTDTRACE))
+b <- c()
+  for (i in 1:47) {
+    b[i]<- sum(data2_longer$Value == i)
+    }
+
+```
+
+Number of NativeAmerican people with different levels of education in dataset:
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(HETS8O, PRTAGE, PTDTRACE ),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer <- filter(data2_longer, grepl('PEEDUCA', DataType))
+data2_longer <- filter(data2_longer, grepl('NativeAmerican', PTDTRACE))
+c <- c()
+  for (i in 1:47) {
+    c[i]<- sum(data2_longer$Value == i)
+  }
+
+
+```
+
+
+Number of Asian people with different levels of education in dataset:
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(HETS8O, PRTAGE, PTDTRACE ),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer <- filter(data2_longer, grepl('PEEDUCA', DataType))
+data2_longer <- filter(data2_longer, grepl('Asian', PTDTRACE))
+d <- c()
+  for (i in 1:47) {
+    d[i]<- sum(data2_longer$Value == i)
+  }
+```
+
+Creating Education to Race dataset:
+We know that people with higher Education can have better access to food from previous charts. So, we want to know what we know about the race proportion of each educational level.  
+```{r}
+m <- c("10th grade", "11th grade", "12th grade", "High Schooch dip",
+       "College no-deg", "Assoc degree Occup","Assoc degree academic",
+       "Bsc", "Msc", "Professional School", "Doctorate")
+education_race <- data_frame(a,b,c,d)
+education_race <- education_race[36:46,]
+education_race[,5] <- rowSums(education_race)
+education_race <- data_frame(m,education_race)
+
+colnames(education_race) <- c("Education","White", "Black", "NativeAmerica", "Asian","Total")
+
+education_race <- melt(as.data.frame(education_race))
+ggplot(education_race, aes(x= Education, y=value, fill= variable),position = position_dodge(preserve = 'single'))+geom_bar(stat="identity",position="dodge")+
+coord_flip()+scale_fill_brewer(palette = "Blues")+
+ labs(y="Number of people", x = "Educational Level") + guides(fill=guide_legend(title="Race")) + theme_classic()+labs(title = "Race proportion of each educational level")
+```
+
+
+
+The proportion of each employment condition stages:
+We know that employed people can have better access to food from previous charts. So, we want to know what we know about the race proportion of employment status.  
+
+
+
+Number of white people with different levels of employment in dataset:
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(HETS8O, PRTAGE, PTDTRACE),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer <- filter(data2_longer, grepl('PEMLR', DataType))
+data2_longer <- filter(data2_longer, grepl('White', PTDTRACE))
+  a <- c()
+  for (i in 1:7) {
+    a[i]<- sum(data2_longer$Value == i)
+    }
+
+```
+
+
+Number of black people with different levels of employment in dataset:
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(HETS8O, PRTAGE, PTDTRACE),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer <- filter(data2_longer, grepl('PEMLR', DataType))
+data2_longer <- filter(data2_longer, grepl('Black', PTDTRACE))
+  b <- c()
+  for (i in 1:7) {
+    b[i]<- sum(data2_longer$Value == i)
+    }
+```
+
+
+Number of Native American people with different levels of employment in dataset:
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(HETS8O, PRTAGE, PTDTRACE),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer <- filter(data2_longer, grepl('PEMLR', DataType))
+data2_longer <- filter(data2_longer, grepl('NativeAmerican', PTDTRACE))
+  c <- c()
+  for (i in 1:7) {
+    c[i]<- sum(data2_longer$Value == i)
+    }
+```
+
+
+Number of Asian people with different levels of employment in dataset:
+```{r}
+data2_longer <- data2%>%
+  pivot_longer(-c(HETS8O, PRTAGE, PTDTRACE),
+               names_to = "DataType",     
+               values_to = "Value",
+               values_drop_na = TRUE)
+data2_longer <- filter(data2_longer, grepl('PEMLR', DataType))
+data2_longer <- filter(data2_longer, grepl('Asian', PTDTRACE))
+  d <- c()
+  for (i in 1:7) {
+    d[i]<- sum(data2_longer$Value == i)
+    }
+```
+
+
+Creating Employment to Race dataset:
+```{r}
+m <- c("Employed at Work", "Employed-Absent", "Unemployed Looking","Unemployed on Layoff", "Retired", "Disabled", "Not in labor- other")
+employment_race <- data_frame(a,b,c,d)
+employment_race[,5] <- rowSums(employment_race)
+employment_race <- data_frame(m,employment_race)
+
+colnames(employment_race) <- c("Employment","White", "Black", "NativeAmerica", "Asian","Total")
+
+employment_race <- melt(as.data.frame(employment_race))
+ggplot(employment_race, aes(x= Employment, y=value, fill= variable),position = position_dodge(preserve = 'single'))+geom_bar(stat="identity",position="dodge")+
+coord_flip()+scale_fill_brewer(palette = "Blues")+
+ labs(y="Number of people", x = "Employment Status") + guides(fill=guide_legend(title="Race")) + theme_classic() + theme_classic()+labs(title = "Race proportion of employment status")
+```
+
+
+
+
+State COVID-19 death and Case Data Import:
+```{r}
+library(readr)
+```
+
+Clean Data:
+```{r}
+Death_Case[is.na(Death_Case)] = 0
+Death_Case1 <- Death_Case[c(1:57),c(2,3,4,5,16,17,18,19)]
+colnames(Death_Case1)[1] <- "state"
+```
+
+
+
+
+
+
+Preparing Race data import:
+```{r}
+library(readr)
+```
+
+
+clean Data:
+```{r}
+Race_Data[is.na(Race_Data)] = 0
+Race_Data1 <- Race_Data[,c("NAME","SEX","RACE","POPESTIMATE2019")]
+
+
+```
+
+Change Column name:
+```{r}
+colnames(Race_Data1) <- c("state", "Sex", "Race", "Population")
+```
+
+
+Make abb of state name:
+```{r}
+st_crosswalk <- tibble(state = state.name) %>%
+   bind_cols(tibble(abb = state.abb)) %>% 
+   bind_rows(tibble(state = "District of Columbia", abb = "DC"))
+Race_Data2<- left_join(Race_Data1, st_crosswalk, by = "state")
+
+```
+
+```{r}
+
+Race_d <- Race_Data2[,c("Race","Population","abb")] %>%
+    group_by(abb, Race) %>% 
+    summarise_each(funs(sum))
+
+
+    
+    
+```
+
+```{r}
+Race_d_2 <- Race_d %>% pivot_wider(names_from = Race, values_from = Population)
+
+colnames(Race_d_2)<- c("state","WhitePop","BlackPop","NativeAmericanPop","Asian","Island")
+```
+
+
+
+
+
+
+Import Data of Education:
+```{r}
+library(readr)
+Education_States[is.na(Education_States)] = 0
+colnames(Education_States)[1]<-"state"
+colnames(Education_States)[2]<-"High School"
+colnames(Education_States)[4]<-"Bachelor"
+colnames(Education_States)[6]<- "Advanced Education"
+
+Education_States1 <- Education_States[,c("state","High School", "Bachelor", "Advanced Education")]
+
+```
+
+
+Make abb of state name:
+```{r}
+st_crosswalk <- tibble(state = state.name) %>%
+   bind_cols(tibble(abb = state.abb)) %>% 
+   bind_rows(tibble(state = "District of Columbia", abb = "DC"))
+Education_States2 <- left_join(Education_States1, st_crosswalk, by = "state")
+colnames(Education_States2)<-c("STATE","High School", "Bachelor", "Advanced Education","state")
+```
+
+
+
+Left Join:
+```{r}
+race_edu <- left_join(Race_d_2, Education_States2, by = "state")
+
+
+#This is the data having all the race, covid-19 and education information:
+race_edu_death <- left_join(Death_Case1, race_edu, by="state")
+```
+
+
+
+
+US states center long-lat
+```{r}
+colnames(statelatlong)[1] <- "state"
+```
+US center data joined with race_edu_death Data:
+```{r}
+data_map <- left_join(statelatlong, race_edu_death)
+```
+
+Prepare Data for Mapping:
+```{r}
+#We want first column as LONG
+#If IN THIS PART YOU GET ERROR START RUNNING FROM LINE 447
+
+data_map1 <- data_map[,c(2:20)]
+#Edit Longitude and Latitude Data with transform function 
+data_map_transformed <- usmap_transform(data_map1)
+```
+
+mapping the data:
+
+1. In this map you will see heat map of the highest number of cases and circles as deaths 
+```{r}
+
+
+plot_usmap(data = race_edu_death , values = "Cases_Total", color = "red") + 
+  scale_fill_continuous(
+    low = "white", high = "red", name = "Total cases", label = scales::comma
+  ) + theme(legend.position = "right") + geom_point(data = data_map_transformed, aes(x = Longitude.1, y = Latitude.1, size = Deaths_Total),
+             color = "Blue", alpha = 0.25) +
+  labs(title = "Total Case and Death Number")
+
+
+
+```
+
+
+
+2. In this map you will heat map of the highest number of cases and circles as deaths for black people 
+In states with not much of balck people case, their death rate is still high
+```{r}
+plot_usmap(data = race_edu_death , values = "Cases_Black", color = "red") + 
+  scale_fill_continuous(
+    low = "white", high = "red", name = "Population of Black", label = scales::comma
+  ) + theme(legend.position = "right") + geom_point(data = data_map_transformed, aes(x = Longitude.1, y = Latitude.1, size = Deaths_Black),
+             color = "Blue", alpha = 0.25) +
+  labs(title = "Total Case and Death Number for Black People")
+```
+3. Higher-Education level and Case Number
+
+
+```{r}
+race_edu_death$"Advanced Education" <- as.numeric(sub("%", "", race_edu_death$"Advanced Education"))
+plot_usmap(data = race_edu_death , values = "Advanced Education", color = "red") + 
+  scale_fill_continuous(
+    low = "white", high = "red", name = "Education Level", label = scales::comma
+  ) + theme(legend.position = "right") + geom_point(data = data_map_transformed, aes(x = Longitude.1, y = Latitude.1, size = Cases_Total),
+             color = "Blue", alpha = 0.25) +
+  labs(title = "Higher Education and Case Numbers")
+```
+
+
+4. Higher-Education level and Death Number 
+```{r}
+race_edu_death$"Advanced Education" <- as.numeric(sub("%", "", race_edu_death$"Advanced Education"))
+plot_usmap(data = race_edu_death , values = "Advanced Education", color = "red") + 
+  scale_fill_continuous(
+    low = "white", high = "red", name = "Education Level", label = scales::comma
+  ) + theme(legend.position = "right") + geom_point(data = data_map_transformed, aes(x = Longitude.1, y = Latitude.1, size = Deaths_Total),
+             color = "Blue", alpha = 0.25) +
+  labs(title = "Higher Education and Death Numbers")
+```
+
+
+
+
+Covid-19 analysis cont.
+```{r}
+
+
+final<-Race_Data_Entry_CRDT[c(1:56),]
+
+
+"US Population Distribution"
+us_population<- 328239523
+white_population<-us_population*0.634
+black_population<-us_population*.134
+LatinX_population<-us_population*0.153
+Asian_population<-us_population*0.59
+AIAN_population<-us_population*0.013
+NHPI_population<-us_population*0.02
+
+population<-c(white_population, black_population, LatinX_population,Asian_population, AIAN_population, NHPI_population)
+Ethnicity<-c("White", "Black", "LatinX", "Asian", "AIAN", "NHPI")
+population_US<- data.frame(Ethnicity,population)
+pct <- round(population_US$population/sum(population_US$population)*100)
+lbls <- paste(population_US$Ethinicty, pct)
+lbls <- paste(lbls,"%",sep="") 
+pie(population_US$population, labels = lbls, main="US Population Distribution", col = rainbow(length(population_US$population)))
+legend("topright", c("White", "Black", "LatinX", "Asian", "AIAN", "NHPI"), cex = 0.8,
+   fill = rainbow(length(population_US$population)))
+
+
+```
+```{r}
+
+Total_cases<-final %>% summarise(Total_cases_overall=sum(Cases_Total, na.rm = TRUE),
+                                        Total_cases_white=sum(Cases_White, na.rm = TRUE),
+                                        Total_cases_black=sum(Cases_Black, na.rm = TRUE),
+                                        Total_cases_latinX=sum(Cases_LatinX, na.rm = TRUE),
+                                        Total_cases_asian=sum(Cases_Asian, na.rm=TRUE),
+                                        Total_cases_AIAN=sum(Cases_AIAN, na.rm=TRUE),
+                                        Total_cases_NHPI=sum(Cases_NHPI, na.rm=TRUE))%>% drop_na()
+
+deaths<-final %>% summarise(Total_deaths_overall=sum(Deaths_Total, na.rm = TRUE),
+                                        Total_deaths_white=sum(Deaths_White, na.rm = TRUE),
+                                        Total_deaths_black=sum(Deaths_Black, na.rm = TRUE),
+                                        Total_deaths_latinX=sum(Deaths_LatinX, na.rm = TRUE),
+                                        Total_deaths_asian=sum(Deaths_Asian, na.rm=TRUE),
+                                        Total_deaths_AIAN=sum(Deaths_AIAN, na.rm=TRUE),
+                                        Total_deaths_NHPI=sum(Deaths_NHPI, na.rm=TRUE))%>% drop_na()
+
+
+cases_percentage<-Total_cases %>% summarise((Total_cases_white/Total_cases_overall)*100, 
+                                       (Total_cases_black/Total_cases_overall)*100,
+                                       (Total_cases_latinX/Total_cases_overall)*100,
+                                       (Total_cases_asian/Total_cases_overall)*100,
+                                       (Total_cases_AIAN/Total_cases_overall)*100,
+                                       (Total_cases_NHPI/Total_cases_overall)*100)
+
+deaths_percentage<-deaths %>% summarise((Total_deaths_white/Total_deaths_overall)*100, 
+                                             (Total_deaths_black/Total_deaths_overall)*100,
+                                             (Total_deaths_latinX/Total_deaths_overall)*100,
+                                             (Total_deaths_asian/Total_deaths_overall)*100,
+                                             (Total_deaths_AIAN/Total_deaths_overall)*100,
+                                             (Total_deaths_NHPI/Total_deaths_overall)*100)
+
+
+
+
+cases_per_100K<- Total_cases %>% summarise((Total_cases_white/white_population)*100000, 
+                                            (Total_cases_black/black_population)*100000,
+                                            (Total_cases_latinX/LatinX_population)*100000,
+                                            (Total_cases_asian/Asian_population)*100000,
+                                            (Total_cases_AIAN/AIAN_population)*100000,
+                                            (Total_cases_NHPI/NHPI_population)*100000)
+
+deaths_per_100K<- deaths %>% summarise((Total_deaths_white/white_population)*100000, 
+                                           (Total_deaths_black/black_population)*100000,
+                                           (Total_deaths_latinX/LatinX_population)*100000,
+                                           (Total_deaths_asian/Asian_population)*100000,
+                                           (Total_deaths_AIAN/AIAN_population)*100000,
+                                           (Total_deaths_NHPI/NHPI_population)*100000)
+
+cperc<- as.data.frame(t(cases_percentage))
+cper100k<- as.data.frame(t(cases_per_100K))
+cperc$Ethnicty=c("White", "Black","LatinX","Asian","AIAN","NHPI")
+cper100k$Ethnicity=c("White", "Black","LatinX","Asian","AIAN","NHPI")
+
+dperc<- as.data.frame(t(deaths_percentage))
+dper100k<- as.data.frame(t(deaths_per_100K))
+dperc$Ethnicity=c("White", "Black","LatinX","Asian","AIAN","NHPI")
+dper100k$Ethnicity=c("White", "Black","LatinX","Asian","AIAN","NHPI")
+
+```
+
+Plotting Covid-19 Cases and Deaths according to Ethnicity:
+Here we also can have a better understanding of the impact intensity of COVID-19 on different races 
+```{r}
+
+c1<-ggplot(data=cperc, aes(x=Ethnicity,y=V1)) + geom_bar(stat="Identity",width=0.8) + coord_flip()
+d1<-ggplot(data=dperc, aes(x=Ethnicity,y=V1)) + geom_bar(stat="Identity",width=0.8) + coord_flip()
+plot1<-c1+ ggtitle("Covid-19 Cases according to Ethnicity") + ylab("Covid-19 Cases")+theme_classic() 
+plot2<-d1+ ggtitle("Covid-19 Deaths according to Ethnicity") + ylab("Covid-19 Deaths")+theme_classic() 
+grid.arrange(plot1,plot2,nrow=2)
+
+"Plotting Covid-19 Cases and Deaths per 100K population of each Ethnicity"
+c2<-ggplot(data=cper100k, aes(x=Ethnicity,y=V1)) + geom_bar(stat="Identity",width=0.8) + coord_flip()
+d2<-ggplot(data=dper100k, aes(x=Ethnicity,y=V1)) + geom_bar(stat="Identity",width=0.8) + coord_flip()
+plot3<-c2+ ggtitle("Covid-19 Cases per 100K population") + ylab("Covid-19 Cases")+theme_classic() 
+plot4<-d2+ ggtitle("Covid-19 Deaths per 100K population") + ylab("Covid-19 Deaths")+theme_classic() 
+grid.arrange(plot3,plot4,nrow=2)+theme_classic() 
+
+
+"Plotting the 4 graphs together"
+grid.arrange(plot1,plot2,plot3,plot4,nrow=2,ncol=2)
+```
+
+
+
